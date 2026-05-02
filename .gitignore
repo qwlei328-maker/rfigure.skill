@@ -1,0 +1,5 @@
+.DS_Store
+.Rhistory
+*.log
+SKILL.md.bak
+SKILL.md.pre-*
