@@ -9,7 +9,7 @@ description: Use when creating, revising, or reviewing R/ggplot2 statistical fig
 
 This is a general scientific statistical plotting style, not a recipe book for one analysis method. First identify the statistical message, then choose the geometry, annotation, scale, and colors that make the evidence readable.
 
-The style is evidence-first: clean white background, compact paper-ready typography, explicit statistical evidence, restrained color, and consistent visual language across the whole paper.
+The style is evidence-first: clean white background, compact paper-ready typography, explicit statistical evidence, restrained color, and consistent visual language across the whole paper. 
 
 ## Non-Negotiable Base
 
