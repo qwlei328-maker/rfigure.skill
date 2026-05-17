@@ -316,6 +316,85 @@ Use stacked bars, grouped bars, or proportional displays only when parts-of-whol
 
 Use neutral basemaps and let points, rasters, or regions carry the data. For site maps, use black-bordered filled points. Hide lat/lon labels when they do not help interpretation; keep panel border and clean map extent.
 
+#### China Maps And Site Distributions
+
+For China maps, use **Rimagination/ggmapcn** rather than `maps::map_data("world")` when administrative boundaries, coastlines, and the South China Sea line matter. The package gives China-specific layers through `ggmapcn::geom_mapcn()` and `ggmapcn::geom_boundary_cn()`.
+
+Recommended dependencies:
+
+```r
+library(sf)
+library(ggmapcn)    # install from: remotes::install_github("Rimagination/ggmapcn")
+library(patchwork)  # for South China Sea inset placement
+```
+
+Use one projected CRS for map polygons, boundary lines, points, and labels. Convert site coordinates to `sf` before plotting; do not mix raw lon/lat points with projected `geom_sf()` layers.
+
+```r
+china_crs <- "+proj=aea +lat_1=25 +lat_2=47 +lat_0=0 +lon_0=105 +datum=WGS84 +units=m +no_defs"
+
+sites_sf <- sites |>
+  sf::st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE) |>
+  sf::st_transform(china_crs)
+
+ggplot() +
+  ggmapcn::geom_mapcn(admin_level = "province", crs = china_crs,
+                      fill = "#F2F2F2", color = "#B8B8B8", linewidth = LW * 0.7) +
+  ggmapcn::geom_boundary_cn(
+    crs = china_crs,
+    mainland_color = "grey35", mainland_size = LW,
+    coastline_color = "#78A6C8", coastline_size = LW * 0.8,
+    ten_segment_line_color = "grey35", ten_segment_line_size = LW,
+    province_color = "#D0D0D0", province_size = LW * 0.55
+  ) +
+  geom_sf(data = sites_sf, aes(fill = group), shape = 21,
+          size = 2.8, stroke = LW_DAT, colour = "black") +
+  coord_sf(crs = china_crs, xlim = c(72, 142), ylim = c(12, 56),
+           default_crs = sf::st_crs(4326), expand = FALSE) +
+  theme_qw_pub()
+```
+
+**South China Sea / nine-dash-line rule.** If the main map focuses on mainland/site locations, do not stretch the whole map to the equator just to show the full South China Sea line. Keep the main map readable and add a South China Sea inset in the lower-right corner.
+
+`patchwork::inset_element()` alone can misalign the inset: `coord_sf()` preserves aspect ratio and can letterbox the actual panel inside the inset slot. Avoid hand-tuned offsets. Compute the inset slot from projected aspect ratios, turn off the inset map's own panel border, then overlay a separate border-only frame. The frame is not constrained by `coord_sf()`, so its right and bottom edges can align exactly to the main panel.
+
+```r
+projected_extent_ratio <- function(xlim, ylim, crs) {
+  pts <- expand.grid(lon = xlim, lat = ylim)
+  pts_sf <- sf::st_as_sf(pts, coords = c("lon", "lat"), crs = 4326) |>
+    sf::st_transform(crs)
+  b <- sf::st_bbox(pts_sf)
+  as.numeric((b[["xmax"]] - b[["xmin"]]) / (b[["ymax"]] - b[["ymin"]]))
+}
+
+main_xlim <- c(72, 142); main_ylim <- c(12, 56)
+inset_xlim <- c(105, 125); inset_ylim <- c(0, 25)
+
+main_ratio <- projected_extent_ratio(main_xlim, main_ylim, china_crs)
+inset_ratio <- projected_extent_ratio(inset_xlim, inset_ylim, china_crs)
+inset_height <- 0.28
+inset_width <- inset_height * inset_ratio / main_ratio
+
+p_inset_map <- p_south_china_sea +
+  theme(panel.border = element_blank(),
+        axis.text = element_blank(), axis.title = element_blank(),
+        axis.ticks = element_blank(), legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0, "mm"))
+
+p_inset_frame <- ggplot() +
+  theme_void() +
+  theme(plot.background = element_rect(fill = NA, colour = "black", linewidth = LW),
+        plot.margin = margin(0, 0, 0, 0, "mm"))
+
+left <- 1 - inset_width; bottom <- 0; right <- 1; top <- inset_height
+
+p_main +
+  patchwork::inset_element(p_inset_map, left, bottom, right, top, align_to = "panel") +
+  patchwork::inset_element(p_inset_frame, left, bottom, right, top, align_to = "panel")
+```
+
+Use this two-layer inset pattern whenever a fixed-aspect `coord_sf()` inset must have edges flush with the parent panel. Otherwise one edge may look aligned while the other drifts.
+
 ### Matrix Evidence
 
 Use heatmaps for correlations, confusion matrices, distance matrices, or pairwise summaries. Signed matrices should use diverging colors centered at zero. Put coefficients or significance marks inside cells only if still readable at output size.
