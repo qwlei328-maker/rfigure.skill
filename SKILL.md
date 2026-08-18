@@ -356,22 +356,21 @@ ggplot() +
 
 **South China Sea / nine-dash-line rule.** If the main map focuses on mainland/site locations, do not stretch the whole map to the equator just to show the full South China Sea line. Keep the main map readable and add a South China Sea inset in the lower-right corner.
 
-`patchwork::inset_element()` alone can misalign the inset: `coord_sf()` preserves aspect ratio and can letterbox the actual panel inside the inset slot. Avoid hand-tuned offsets. Compute the inset slot from projected aspect ratios, turn off the inset map's own panel border, then overlay a separate border-only frame. The frame is not constrained by `coord_sf()`, so its right and bottom edges can align exactly to the main panel.
+`patchwork::inset_element()` alone can misalign the inset: `coord_sf()` preserves aspect ratio and can letterbox the actual panel inside the inset slot. Avoid hand-tuned offsets. Compute the inset slot from the aspect ratios of the panels **as rendered**, turn off the inset map's own panel border, then overlay a separate border-only frame. The frame is not constrained by `coord_sf()`, so its right and bottom edges can align exactly to the main panel.
+
+Take the ratio from the built plot, not from the corner points of the lon/lat rectangle. `coord_sf(default_crs = )` derives its limits differently from the bounding box of four transformed corners, so a corner-based ratio does not describe the panel that is actually drawn. On the China extent below the two disagree by 31%, which propagates straight into `inset_width`.
 
 ```r
-projected_extent_ratio <- function(xlim, ylim, crs) {
-  pts <- expand.grid(lon = xlim, lat = ylim)
-  pts_sf <- sf::st_as_sf(pts, coords = c("lon", "lat"), crs = 4326) |>
-    sf::st_transform(crs)
-  b <- sf::st_bbox(pts_sf)
-  as.numeric((b[["xmax"]] - b[["xmin"]]) / (b[["ymax"]] - b[["ymin"]]))
+panel_ratio <- function(p) {
+  bp <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]
+  as.numeric(diff(bp$x_range) / diff(bp$y_range))
 }
 
-main_xlim <- c(72, 142); main_ylim <- c(12, 56)
-inset_xlim <- c(105, 125); inset_ylim <- c(0, 25)
-
-main_ratio <- projected_extent_ratio(main_xlim, main_ylim, china_crs)
-inset_ratio <- projected_extent_ratio(inset_xlim, inset_ylim, china_crs)
+# p_main and p_south_china_sea already carry their own coord_sf() limits,
+# e.g. xlim = c(72, 142), ylim = c(12, 56) for the main map and
+#      xlim = c(105, 125), ylim = c(0, 25) for the inset.
+main_ratio <- panel_ratio(p_main)
+inset_ratio <- panel_ratio(p_south_china_sea)
 inset_height <- 0.28
 inset_width <- inset_height * inset_ratio / main_ratio
 
