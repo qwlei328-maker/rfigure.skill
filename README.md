@@ -159,6 +159,18 @@ Rscript scripts/five_panel_china.R
 
 ## 更新日志
 
+### 2026-08-20（补丁）
+
+冷启动测试：由一个只拿到仓库地址、不看任何本地上下文的代理克隆本仓库、只读仓库文档完成一张多面板地图拼图。它成功交付，同时报回一批文档缺陷，以下为经复现后修正的部分。
+
+- **交付契约与最终清单自相矛盾**：清单仍写着"交付脚本不得调用本技能的 helper"，与新的两级契约冲突。已改为：每个图脚本自包含，拼接脚本仅可 `source()` `scripts/rfigure_layout.R` 并在开头声明。
+- **`references/style-and-export.md` 第 5 节的模板仍带 `widths`/`heights`**，而同一文件第 6 节明确指出这么写会让 `theme(aspect.ratio)` 静默失效。照抄模板的人必然踩坑；模板已修正。
+- **日界线切割配方在最需要它的场景下无效**。实测（sf 1.1.x，Natural Earth）：s2 开启时 `lon_0 = 178` 仍残留 Antarctica / Fiji / Russia，`scale = "small"` 直接抛 `Loop 0 is not valid`；s2 关闭后 `medium` 在两种中央经线下均干净。配方改为在函数内临时关闭 s2 并 `st_collection_extract()`（`st_difference` 可能返回 GEOMETRYCOLLECTION，而 `st_coordinates()` 对它没有方法，会让验证步骤本身崩掉）。补充了实测对照表、Antarctica 绕极的说明，以及"跳变判据依赖 −180…180 坐标框，`st_shift_longitude()` 之后会误判"的提示。
+- **`rfigure_measure_panels()` 的面板字母是按实测位置排的，不是 patchwork 的真实 tag**。共享同一行的面板 `top_mm` 可能只差 1e-14 mm，排序方向由浮点噪声决定，进而让按字母取面板的查找取错矩形。排序键现在先按物理容差取整（`order_tolerance_mm`，默认 0.1 mm），文档也写明该列是位置标签、可用 `tag_labels` 覆盖。
+- **面积占比阈值**：正文的"面板越多占比越低"过度概括，与参考实现的 0.52 冲突。改为按设计而非面板数解释，并说明跨行大地图会把占比拉回去。
+- 新增两条实测提示：无设备时 `ggplotGrob()` 等度量会回退到 PostScript 字体（Arial 找不到，标定漂移零点几毫米），必须先开设备；`assert_graticule_labelled()` 只保证标签存在，不保证相邻标签不重叠，密集断点需自行测量物理间距。
+
+
 ### 2026-08-20
 
 本次更新的重点是：把"看起来对"换成"量出来对"。所有新增规则都附带在 ggplot2 4.0.3 / patchwork 1.3.2 上的实测值，几个长期存在的静默失效也一并修掉。

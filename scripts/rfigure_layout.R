@@ -27,14 +27,21 @@
 # ---- Measurement -----------------------------------------------------------
 
 # Returns list(slots, inner). `slots` holds one row per top-level panel
-# viewport, ordered in reading order (top row first, then left to right) and
-# tagged a, b, c, ... to match default patchwork tags. `inner` holds the
+# viewport, ordered in reading order (top row first, then left to right).
+#
+# The `panel` column is a POSITIONAL label, not the tag patchwork drew: it is
+# assigned a, b, c, ... after sorting by measured position. For a design whose
+# reading order matches the tag order this is the same thing; when it does not,
+# pass `tag_labels` in measured reading order to name the rectangles yourself.
+# Verify before trusting a per-panel lookup, for example by asserting that the
+# rectangle you call the map has the map's rendered ratio. `inner` holds the
 # nested viewports that fixed-aspect panels such as coord_sf() draw inside
 # their slot; it is NULL when no panel has one.
 rfigure_measure_panels <- function(plot_object, width_mm, height_mm,
                                    device = c("png", "svg"),
                                    expected_panels = NULL,
-                                   tag_labels = NULL) {
+                                   tag_labels = NULL,
+                                   order_tolerance_mm = 0.1) {
   device <- match.arg(device)
   for (package in c("grid", "grDevices")) {
     if (!requireNamespace(package, quietly = TRUE)) {
@@ -112,8 +119,12 @@ rfigure_measure_panels <- function(plot_object, width_mm, height_mm,
   slots <- finish(do.call(rbind, Map(
     box_for, listing$name[is_slot], listing$vpPath[is_slot]
   )))
-  # Reading order, so panel tags match patchwork's default a, b, c, ...
-  slots <- slots[order(-slots$top_mm, slots$left_mm), , drop = FALSE]
+  # Reading order: top row first, then left to right. Panels that share a row
+  # can differ by floating-point noise (1e-14 mm), which would otherwise decide
+  # the order, so snap the sort keys to a physical tolerance first.
+  sort_key <- function(values) round(values / order_tolerance_mm)
+  slots <- slots[order(-sort_key(slots$top_mm), sort_key(slots$left_mm)), ,
+                 drop = FALSE]
   # wrap_elements(), insets, and nested compositions can expose two coincident
   # viewports at the same depth for one visible panel. Collapse exact repeats
   # so the panel count reflects what a reader sees.

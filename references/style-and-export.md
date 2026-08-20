@@ -144,7 +144,7 @@ For a regular grid:
 
 1. Use one flat `wrap_plots()` call so every row uses the same column geometry and every column uses the same row geometry.
 2. Apply one explicit `aspect.ratio` to every ordinary panel that must have an equal frame.
-3. Use equal `widths` and `heights` only after the common panel aspect is declared.
+3. Do not pass `widths`/`heights` when `theme(aspect.ratio)` defines the panel shape: explicit layout units make each panel fill its slot and silently discard the aspect request (see section 6, item 1).
 4. Keep the complete border theme on every panel, including heatmaps.
 5. Measure panel viewport coordinates from the final composition at the final physical size.
 6. Measure rendered panel height/width and total data-panel area as a share of the full figure.
@@ -161,9 +161,7 @@ composite <- patchwork::wrap_plots(
   p2 + theme(aspect.ratio = PANEL_ASPECT),
   p3 + theme(aspect.ratio = PANEL_ASPECT),
   p4 + theme(aspect.ratio = PANEL_ASPECT),
-  ncol = 2,
-  widths = c(1, 1),
-  heights = c(1, 1)
+  ncol = 2
 ) +
   plot_annotation(tag_levels = "a")
 ```

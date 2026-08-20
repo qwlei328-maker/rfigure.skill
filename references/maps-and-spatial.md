@@ -668,19 +668,35 @@ Two triggers, both measured on ggplot2 4.0.3 / sf with GEOS and s2 available:
 1. **`st_make_valid()` with s2 enabled**, which is the default. The bundled Natural Earth polygons are supplied already split at 180 degrees, but `sf::st_make_valid()` under `sf_use_s2(TRUE)` rejoins Russia and Fiji across the antimeridian. The same pipeline under `sf::sf_use_s2(FALSE)` renders cleanly. A script that calls `st_make_valid()` on a world layer, as every example in this reference does, inherits the problem.
 2. **A central meridian away from 0**. With `lon_0 = 150`, Russia smears across the top of the map and Antarctica across the bottom even without `st_make_valid()`.
 
-Cut the geometries along the projection's antimeridian after any validity repair and before projecting. This works with s2 either way:
+Cut the geometries along the projection's antimeridian after any validity repair and before projecting. **Turn s2 off for the cut**: with s2 enabled the cut silently fails away from the prime meridian and errors outright on the Natural Earth `small` polygons.
 
 ```r
 cut_at_antimeridian <- function(layer, lon_0) {
+  previous <- sf::sf_use_s2(FALSE)          # planar cut; restored on exit
+  on.exit(sf::sf_use_s2(previous), add = TRUE)
   blade <- sf::st_sfc(
     sf::st_linestring(cbind(rep(lon_0 - 180, 181), seq(-90, 90))),
     crs = 4326
   )
-  sf::st_make_valid(suppressWarnings(
+  cut <- sf::st_make_valid(suppressWarnings(
     sf::st_difference(sf::st_make_valid(layer), sf::st_buffer(blade, 0.00001))
   ))
+  # st_difference can return GEOMETRYCOLLECTION; st_coordinates() has no method
+  # for it, so the verification below would fail on the layer it must check.
+  sf::st_collection_extract(cut, "POLYGON", warn = FALSE)
 }
 ```
+
+Measured on sf 1.1.x with GEOS and s2 available, Natural Earth via rnaturalearth, counting features whose rings still cross the antimeridian afterwards:
+
+| s2 during the cut | dataset | `lon_0 = 0` | `lon_0 = 178` |
+|---|---|---|---|
+| enabled (default) | `medium` | none | **Antarctica, Fiji, Russia** |
+| enabled | `small` | **error**: `Loop 0 is not valid` | **error** |
+| disabled | `medium` | none | none |
+| disabled | `small` | Antarctica only | Antarctica only |
+
+Two consequences. The cut must run with s2 disabled, otherwise it fixes only the prime-meridian case - the one case that rarely needs it. And Antarctica keeps being reported on the coarse `small` polygons because it genuinely wraps the pole; either exclude it, as a world site map usually does, or exempt it by name in the assertion and say so.
 
 Verify by looking at the rings, not at bounding boxes. A country legitimately drawn in two pieces spans the whole globe in its bounding box, so a bbox test flags correct maps and misses broken ones; a ring that crosses the antimeridian has consecutive vertices whose longitude jumps by more than 180 degrees:
 
@@ -701,10 +717,12 @@ antimeridian_crossers <- function(layer, id_column = "admin") {
     layer[[id_column]][unique(feature[as.character(ring) %in% bad])]
   )))
 }
-stopifnot(length(antimeridian_crossers(world)) == 0)
+stopifnot(length(setdiff(antimeridian_crossers(world), "Antarctica")) == 0)
 ```
 
-On the raw layer this reports `Fiji, Russia`; after the cut it reports nothing, and the streaks are gone from the export.
+On the raw layer this reports `Fiji, Russia`; after an s2-disabled cut it reports nothing on the `medium` polygons, and the streaks are gone from the export.
+
+Two limits of this check that a first use will hit: it needs polygons, so run it after `st_collection_extract()`; and the "jump greater than 180 degrees" test assumes longitudes in the -180 to 180 frame. A layer shifted to 0-360 with `sf::st_shift_longitude()` - which is how a viewport that itself straddles the antimeridian is built - flags every country crossing the prime meridian instead. Shift the layer back, or test against the frame you actually used.
 
 `sf::st_wrap_dateline()` is the documented tool, but on these polygons it failed with `IllegalArgumentException: Points of LinearRing do not form a closed linestring` and left the smearing in place.
 
