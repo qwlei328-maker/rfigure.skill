@@ -1,581 +1,282 @@
 ---
-name: rfigure.skill
-description: Use when creating, revising, or reviewing R/ggplot2 statistical figures for research papers, theses, ecology/environmental analyses, model outputs, grouped comparisons, maps, matrices, or multi-panel layouts that should follow Qiongwei's established plotting style.
+name: rfigure
+description: Create, revise, reproduce, export, or audit publication-ready, self-contained R/ggplot2 figure scripts for papers, theses, reports, ecology/environmental analyses, statistical results, maps, matrices, and multi-panel layouts. Use when a user asks for an R figure, public plotting code, ggplot2 code, journal-style visual, figure QA, consistent manuscript styling, or Qiongwei's established plotting style.
 ---
 
-# rfigure.skill
+# R Figure
 
-## Core Idea
+Create figures that preserve scientific meaning before polishing appearance. Deliver public, readable R code that another person can run without this skill directory.
 
-This is a general scientific statistical plotting style, not a recipe book for one analysis method. First identify the statistical message, then choose the geometry, annotation, scale, and colors that make the evidence readable.
+## Instructions for the AI Agent
 
-The style is evidence-first: clean white background, compact paper-ready typography, explicit statistical evidence, restrained color, and consistent visual language across the whole paper.
+The rules below constrain the AI using this skill. They are not commands directed at the human user. The human may request filtering, sampling, alternative styling, or another analysis; implement such choices when legitimate, but keep them explicit in code and report their effect.
 
-## Non-Negotiable Base
+## Self-Contained Output Contract
 
-For formal publication-style figures:
+Two kinds of script leave this skill, and the contract binds them differently.
 
-1. Use Arial 8 pt for all text: axis text, axis titles, legends, annotations, facet strips. Tags (panel labels a/b/c/d) may be 9–10 pt **bold** as the only allowed exception.
-2. Draw a black four-sided border around every panel.
-3. Structural lines (panel border, axis ticks, reference/null lines) are 1 pt: set `LW <- 25.4 / 72`. Data geometries (fitted lines, error bars, box outlines) should be **clearly** heavier than structure — use `LW * 1.7` to `LW * 2.0` so data > structure. Lower factors (1.3–1.4×) sit below the perceptual threshold for line-weight differentiation at typical panel widths (60–100 mm) and produce figures where data lines are indistinguishable from the panel border.
-4. Do not draw separate `axis.line`; the panel border is the axis frame.
-5. Use a white plot/panel background.
-6. Export in physical units (`mm`, `cm`, or `in`) at 300 or 600 DPI. Use a font-aware device (`ragg::agg_png`, `cairo_pdf`) — see "Engine and Fonts" below.
+### Figure scripts stay self-contained
 
-Requires ggplot2 ≥ 3.5 (for `legend.position = "inside"`, `geom_errorbar(orientation = "y")`); ggplot2 ≥ 3.4 if you only need `linewidth`. `geom_errorbarh()` emits a deprecation warning under 4.0.
+This covers every figure that is one plot, and every panel of a multi-panel figure. A reviewer must be able to run and audit that code without this skill.
 
-```r
-LW     <- 25.4 / 72                  # 1 pt expressed in mm (ggplot2 linewidth unit)
-LW_DAT <- LW * 1.8                   # default weight for data lines / fitted lines (≥ 1.7× LW)
-TXT_PT <- 8                          # in-points text size everywhere
-TXT_TAG <- 9                         # panel tag (a/b/c/d) — the only allowed exception
-TXT_GG <- TXT_PT / ggplot2::.pt      # SAME size for geom_text/annotate (mm under the hood)
+- Deliver each figure as one self-contained `.R` script unless the user explicitly requests a project/package structure.
+- Put package imports, input paths, random seeds, dimensions, DPI, fonts, line widths, colors, factor orders, statistical settings, transformations, plot construction, and export calls in that script.
+- Do not `source()` this skill's plotting helpers, and do not require recipients to install or locate `rfigure_helpers.R`.
+- Do not hide publication parameters behind an unavailable tool or opaque wrapper. A short local function is acceptable only when its full definition and defaults are visible in the same delivered script.
 
-theme_qw_pub <- function(base_pt = TXT_PT, lw = LW) {
-  theme_classic(base_size = base_pt, base_family = "Arial") +
-    theme(
-      text         = element_text(family = "Arial", size = base_pt, colour = "black"),
-      axis.text    = element_text(family = "Arial", size = base_pt, colour = "black"),
-      axis.title   = element_text(family = "Arial", size = base_pt, colour = "black"),
-      legend.text  = element_text(family = "Arial", size = base_pt, colour = "black"),
-      legend.title = element_text(family = "Arial", size = base_pt, colour = "black"),
-      strip.text   = element_text(family = "Arial", size = base_pt, colour = "black"),
-      panel.border = element_rect(colour = "black", fill = NA, linewidth = lw),
-      axis.line    = element_blank(),
-      axis.ticks   = element_line(colour = "black", linewidth = lw),
-      panel.grid   = element_blank(),
-      plot.background  = element_rect(fill = "white", colour = NA),
-      panel.background = element_rect(fill = "white", colour = NA),
-      # Inside-panel legends need an opaque background or they bleed into data:
-      legend.background = element_rect(fill = "white", colour = NA),
-      legend.key        = element_rect(fill = "white", colour = NA),
-      legend.margin     = margin(1, 2, 1, 2, "mm"),
-      legend.key.size   = unit(3, "mm"),
-      plot.margin  = ggplot2::margin(2, 2, 2, 2, "mm")
-    )
-}
-```
+### Composition scripts may reference this skill
 
-**Critical text-size trap.** `element_text(size = 8)` is points; `geom_text(size = 8)` and `annotate("text", size = 8)` are millimetres (≈ 22.6 pt). Always pass `size = TXT_GG` (= `8 / ggplot2::.pt`) to in-panel text, never the bare `8`. This single mistake produces axis-text-vs-annotation size mismatches in roughly every first attempt.
+Assembling finished panels is a different job from making them. Reviewers read the panel code; almost nobody reads the stitching code, and many recipients assemble panels by hand in PowerPoint or Illustrator instead. So the assembly step may reuse this skill's geometry code rather than copying it into every deliverable.
 
-For maps or matrices, axes/gridlines may be hidden or softened, but font, white background, black panel border, and 1 pt frame still anchor the figure.
+- A composition script may `source()` `scripts/rfigure_layout.R` for rendered-geometry measurement and layout checks. That file holds measurement and checking only: no themes, palettes, scales, statistics, or export parameters.
+- Deliver the panel scripts alongside the composition script, so every plotted value remains auditable without this skill.
+- Keep the composition's own parameters visible in the composition script: design string, widths and heights, tags, canvas size, DPI, and the export calls.
+- Print the measured geometry to the console and into the sidecar caption, so the QA numbers survive for a reader who never runs the helper.
+- If the recipient must be able to re-run the assembly with no dependency on this skill, inline the helper instead and say so.
+- Keep the rest of `scripts/` for maintainer regression tests. Read them for implementation details, then inline what a figure script needs.
 
-## Engine And Fonts
+## Load Only What the Task Needs
 
-Default R devices on macOS cannot find "Arial" in the PostScript font database, producing dozens of `font family 'Arial' not found` warnings and silently broken PDFs. Use a font-aware engine:
+- Read `references/style-and-export.md` for the self-contained parameter/theme/export template, fonts, dimensions, and layout mechanics.
+- Read `references/figure-patterns.md` for distributions, relationships, model effects, rankings, composition, matrices, time series, facets, large data, or annotations.
+- Read `references/maps-and-spatial.md` for spatial figures, especially China maps, `coord_sf()`, and South China Sea insets.
+- Read `references/quality-and-accessibility.md` before final delivery or when reviewing an existing figure.
 
-```r
-# Once per session, before any ggsave():
-options(warn = 1)                                # surface warnings immediately
-suppressPackageStartupMessages({
-  # Required for every figure that uses this style:
-  library(ggplot2)        # ≥ 3.5; under 4.0 geom_errorbarh() emits deprecation warnings
-  library(systemfonts)    # font discovery
-  library(ragg)           # font-aware raster devices
-})
-# Load only when the figure actually uses them:
-# library(patchwork)    # multi-panel layouts (|, /, plot_layout, plot_annotation)
-# library(svglite)      # SVG export
-# library(ggpp)         # geom_text_npc() for NPC-coordinate annotations
-# library(ggrastr)      # rasterise heavy point layers (n ≳ 1e5)
-# library(ggsignif)     # pairwise significance brackets
+## Agent Guardrails for Scientific Integrity
 
-# Detect → register fallback → assert (not assert-then-register, which makes
-# the fallback unreachable):
-have_arial <- "Arial" %in% systemfonts::system_fonts()$family
-if (!have_arial) {
-  # Linux/CI: alias a metrics-compatible font (Liberation Sans ≈ Arial)
-  # Chinese labels: also alias a CJK font, otherwise Arial drops glyphs.
-  liberation <- Sys.glob("/usr/share/fonts/**/LiberationSans-Regular.ttf")
-  if (length(liberation)) systemfonts::register_font("Arial", plain = liberation[[1]])
-  have_arial <- "Arial" %in% systemfonts::system_fonts()$family
-}
-stopifnot(have_arial)
-```
+1. Preserve the supplied raw data and transformation code. Never invent, selectively hide, or silently drop observations, groups, variables, uncertainty, missingness, or inconvenient results.
+2. Do not silently subsample final evidence. Rasterize, bin, aggregate with a declared scientific rule, or show density instead. If the user requests a sampled preview, fix the seed and label it as a preview.
+3. State filtering, exclusions, normalization, smoothing, binning, model, uncertainty definition, sample size, and unit of replication when they affect the figure.
+4. Use honest scales. Bars/areas normally include zero; disclose axis breaks or nonzero limits; label log transforms and the handling of zero/negative values; avoid dual axes unless justified.
+5. Use final physical dimensions from the start. Verify current journal requirements when a target venue is named; otherwise label dimensions as provisional.
+6. Inspect rendered outputs. A script running without errors is not visual QA.
 
-Export rules:
+## Qiongwei Style Baseline
 
-- **Raster (PNG/TIFF/JPEG)**: `ggsave(..., device = ragg::agg_png)` / `agg_tiff`. This is the default. 600 dpi at the final physical size is acceptable for nearly every journal.
-- **Vector (SVG)**: `ggsave(..., device = svglite::svglite)`. SVG is the safest font-aware vector format on macOS without XQuartz.
-- **Vector (PDF)** is awkward on macOS:
-  - `cairo_pdf` requires XQuartz (`/opt/X11/lib/libXrender.1.dylib`); without it, R silently falls back to the non-font-aware `pdf()` device and produces hundreds of `Arial' not found` warnings + a broken PDF.
-  - If you need PDF, install XQuartz (`brew install --cask xquartz`) and then use `cairo_pdf`, **or** export SVG via `svglite` and convert with `rsvg-convert -f pdf` / Inkscape.
-  - `ragg` does **not** ship a PDF device.
-- Fallback when `systemfonts`/`ragg` is unavailable: `showtext::showtext_auto()`. With `showtext`, prefer `units = "in"` because `dpi` is silently ignored on some downstream devices.
-- Linux/CI: install `ttf-mscorefonts-installer` (or alias Liberation Sans as Arial via `systemfonts::register_font(name = "Arial", plain = "<path-to-LiberationSans-Regular.ttf>")`).
+- Use Arial 8 pt for ordinary Latin text. Use one explicit CJK sans family for Chinese text.
+- Use 9–10 pt bold lowercase `a`, `b`, `c`, ... as the default panel tags. Use uppercase only when the user or venue requires it.
+- Keep at least 1 mm clearance between a panel tag and any neighbouring axis decoration; giving `plot.tag` a small bottom margin (for example 1.2 mm) is the default mechanism.
+- Use a white panel and plot background.
+- Draw one black four-sided 1 pt panel border. Do not add separate axis lines.
+- Treat the 1 pt frame/ticks/reference lines as structure. Draw fitted lines, box outlines, and error bars at least 1.7× heavier.
+- Keep structure black/grey and reserve restrained color for data meaning.
+- When group identity matters, encode it with color plus shape, linetype, pattern, direct labels, or facets. Spatial site maps are the deliberate exception: default all site classes to the same solid circular glyph and distinguish classes with a named color palette; do not turn map sites into mixed circles, squares, and triangles unless the user explicitly requests shapes. Preserve clarity with legend text, direct labels, or redundant grouping in the accompanying statistical panels.
+- Give every geographic map a graticule with decimal-degree tick labels such as `114.0°E` and `35.5°N`, drawn with labels and ticks on the left and bottom edges only. The graticule carries orientation, so do not add a north arrow by default; add one only when the user asks. Keep the graticule subordinate to the evidence: thin light-grey lines under the data, never a heavy grid competing with boundaries or sites. Drop this furniture only for a locator inset, a deliberately bare schematic, or an explicit user request, and disclose the choice.
+- Prefer legends inside genuine, inspected whitespace within the data rectangle. For spatial panels, make an interior legend fully transparent and borderless (`fill = NA`, `colour = NA`) so it visually belongs to the map; verify that map features remain readable behind and around it. If no safe interior space exists, use direct labels, a right-side/shared guide area, or another deliberate layout. Avoid top/bottom legends as the default because they shrink panel height; never cover evidence to save space.
+- In a regular multi-panel grid, align the black data-panel rectangles, not merely the outer plot canvases. Panels in the same column must share left/right edges; panels in the same row must share top/bottom edges.
+- Do not obtain alignment by shrinking the evidence into small, flat panels. At final size, verify both the rendered panel aspect and how much of the figure is occupied by data panels.
+- Default to one figure-level caption or notes outside the image instead of repeating prose captions beneath every subfigure. Keep per-panel captions only when the venue or scientific meaning requires them.
+- Add `labs(alt = ...)` for delivered plots; complex figures also need a longer description or source-data alternative.
 
-Treat any `font family 'Arial' not found` warning as a hard failure, not a cosmetic notice.
-
-**Chinese / CJK labels.** Arial has no CJK glyphs; mixing Chinese text in an Arial-family figure produces tofu boxes (`☐`). Either keep all in-figure text English (axis titles, legend labels) and put Chinese only in the caption, or set the family to a CJK-capable font that also renders Latin cleanly:
+Start every delivered script with visible parameters:
 
 ```r
-# Pick a CJK font available on the system; fall back to PingFang on macOS.
-cjk <- intersect(c("Source Han Sans SC", "Noto Sans SC", "PingFang SC"),
-                 systemfonts::system_fonts()$family)[1]
-theme_qw_pub_cjk <- function() theme_qw_pub() +
-  theme(text = element_text(family = cjk),
-        axis.text = element_text(family = cjk),
-        axis.title = element_text(family = cjk))
-```
+library(ggplot2)
 
-## Layout And Legends
+FONT_FAMILY <- "Arial"
+TEXT_PT     <- 8
+TAG_PT      <- 9
+TEXT_GG     <- TEXT_PT / ggplot2::.pt   # .pt = 72.27 / 25.4
+LINE_MM     <- 25.4 / 72
+DATA_LINE_MM <- LINE_MM * 1.8
 
-Design the final physical layout before writing plot code. Decide the single-panel size, combined-figure size, panel arrangement, legend placement, and relative panel widths/heights as part of the figure design.
+FIG_WIDTH_MM  <- 85
+FIG_HEIGHT_MM <- 65
+FIG_DPI       <- 600
+RANDOM_SEED   <- 20260818
 
-Rules:
-
-- Match the panel arrangement to the comparison. If panels are meant to be compared side by side, use a horizontal layout; use vertical layouts only when the evidence reads naturally from top to bottom or one panel needs more vertical space.
-- Preserve panel proportions in multi-panel figures. Do not stretch one panel or compress another just because it fills a `patchwork` layout.
-- Place legends in unused data-area whitespace when possible. Keep them away from fitted lines, intervals, points, and statistical annotations.
-- **Positively-sloped scatter is a special case**: top-right is taken by the statistical annotation, bottom-right by the rising data tail, top-left by the y-axis tail, and bottom-left by the x-axis tail. There is rarely an inside-panel slot that doesn't overlap data. For these figures, prefer one of: (a) `legend.position = "right"` (outside, narrow, `legend.key.width = unit(2.5, "mm")`); (b) **direct labels at line ends** via `ggrepel::geom_text_repel(direction = "x", hjust = 0)`; (c) drop the legend entirely if axis title or caption already names the groups.
-- ggplot2 ≥ 4.0 syntax for in-panel legends: `theme(legend.position = "inside", legend.position.inside = c(x, y))`. The deprecated `legend.position = c(x, y)` still works but emits warnings.
-- Prefer one-row or one-column legends. Avoid wrapped, multi-line legends that consume plot area or change panel proportions.
-- In combined figures, remove repeated legends and keep only the legend needed to decode each panel.
-- If direct labels already explain color meaning, omit the legend rather than duplicating the explanation.
-- **Matrix / heatmap colorbars default to outside the panel**, not inside. The empty triangle of a triangular correlation matrix is *not* safe whitespace — a vertical colorbar will visually cross data rows. Use `theme(legend.position = "right", legend.key.width = unit(2.5, "mm"))` and only move it inside if you have measured the empty area against the legend bbox.
-- Panels with `coord_fixed()` / `coord_equal()` refuse to stretch and break `patchwork`'s default equal-size layout. **`plot_layout(widths = c(1, 1))` does NOT equalize panel sizes** when both panels have `coord_fixed` but different scale types (continuous vs discrete) or different data ranges; the resulting widths depend on data range and font extent. Two reliable workarounds:
-
-    **Recipe A — wrap each fixed panel in `wrap_elements()` so its slot can centre it:**
-    ```r
-    p_a_wrapped <- patchwork::wrap_elements(full = panel_a)
-    p_b_wrapped <- patchwork::wrap_elements(full = panel_b)
-    combined <- p_a_wrapped + p_b_wrapped + plot_layout(widths = c(1, 1))
-    ```
-    Each fixed panel keeps its data aspect; surrounding whitespace soaks up the slack.
-
-    **Recipe B — pre-compute the data aspect and pass it to `widths`:**
-    ```r
-    a_aspect <- diff(range(d$y_var)) / diff(range(d$x_var))
-    combined <- panel_a + panel_b + plot_layout(widths = c(a_aspect, 1))
-    ```
-
-    If neither produces an acceptable balance, render each panel to its own grob with known mm dimensions and composite via `gridExtra::grid.arrange(grobs = ..., widths = grid::unit(c(85, 85), "mm"))`.
-
-Standard panel tag (`a`, `b`, ...): place via `labs(tag = "a")` plus `theme(plot.tag = element_text(face = "bold", size = TXT_TAG), plot.tag.position = c(0.02, 0.98))`. Prefer `patchwork::plot_annotation(tag_levels = "a")` for multi-panel figures so tags are consistent automatically.
-
-## Color System
-
-Color is semantic, not decorative. Across one paper, the same meaning must keep the same color. Do not choose a new palette for each figure.
-
-### Structural Colors
-
-Use black and grey for structure so data colors carry meaning.
-
-```r
-col_text <- "black"
-col_border <- "black"
-col_ref <- "grey40"
-col_light_ref <- "grey70"
-col_land <- "#EFEFEF"
-col_map_border <- "#CCCCCC"
-```
-
-Black: text, panel borders, axis ticks, point outlines, significance brackets.  
-Grey: reference lines, 1:1 lines, map outlines, non-focal guides, missing or background classes.
-
-### Data Colors
-
-Do not hard-code a universal meaning for a specific hue. Define a paper-level palette for the current project, then reuse it consistently.
-
-Rules for choosing data colors:
-
-- Assign colors by semantic role within the paper, not by chart type or analysis method.
-- If the paper already has a palette, preserve it.
-- If the paper introduces a new semantic group, choose colors that are visually distinct, printable, and not easily confused in grayscale.
-- Ordered groups should use an ordered sequence; unordered categories should use distinct categorical colors.
-- Continuous magnitudes should use sequential gradients unless the scale has a meaningful midpoint.
-- Signed effects, correlations, residuals, or anomalies should use diverging gradients centered at zero.
-- Large categorical systems, such as land-cover or biome classes, may use a fixed palette, but the palette belongs to that category system rather than to this skill.
-
-Write project colors near the top of each script. Use concrete hex values, not placeholder symbols, and name entries by *scientific meaning*:
-
-```r
-# Replace the hexes with the real paper palette. Names should be the role,
-# not "color1"/"groupA" — these names appear in legends and aes(values=).
 paper_palette <- c(
-  "Forest"     = "#3B8686",
-  "Grassland"  = "#E08214",
-  "Cropland"   = "#7A4FB7"
-)
-
-# Apply with `breaks = names(paper_palette)` so legend order follows your
-# declared role order, not alphabetical:
-# scale_colour_manual(values = paper_palette, breaks = names(paper_palette))
-# scale_fill_manual(values   = paper_palette, breaks = names(paper_palette))
-#
-# Or pin the order at the data level:
-# dat$group <- factor(dat$group, levels = names(paper_palette))
-```
-
-The skill enforces consistency and restraint, not a universal set of data hues.
-
-### Palette Helpers
-
-External palette tools such as [ColorSpace](https://mycolor.space/) may be used to generate candidate palettes, but they do not decide the scientific mapping.
-
-Use this workflow when no manuscript palette already exists:
-
-1. List the color roles first: variable classes, treatments, model families, vegetation types, mechanisms, response groups, time periods, or effect signs.
-2. Choose one anchor color from the research theme, object, or existing manuscript style.
-3. Generate candidate palettes from that anchor color using ColorSpace or a similar tool.
-4. Select candidates by data structure: distinct colors for unordered categories, ordered sequences for ordered groups, sequential gradients for continuous magnitudes, and diverging palettes centered at zero for signed effects.
-5. Check that one hue does not carry two different meanings in the same paper or combined figure.
-6. Write the final hex values into the script as a named palette so the figure is reproducible.
-
-### Palette Construction
-
-Build the palette before drawing the figures. Treat it as part of the paper design:
-
-1. List the recurring semantic roles in the manuscript: treatments, models, vegetation types, mechanisms, response groups, time periods, or effect signs.
-2. Decide which roles must be compared directly. Give directly compared roles the clearest separation.
-3. Decide which role is primary. Make the primary role visually stronger than secondary roles through saturation, darkness, or line weight, not by adding extra colors.
-4. Reuse the same named palette in every script. The palette names should be scientific meanings, not temporary labels like `color1`.
-
-Pairing rules:
-
-- Two groups: use two clearly separated hues with similar visual weight, unless one is explicitly the reference. If one is the reference, make the reference quieter and the focal group stronger.
-- Three groups: use a balanced triad or an ordered light-middle-dark sequence depending on whether the groups are unordered or ordered.
-- Four to eight groups: use a categorical palette with moderate saturation and similar brightness; avoid one category accidentally dominating.
-- More than eight groups: reduce the number of shown categories, facet, direct-label, or use a recognized category palette for that classification system.
-- Ordered categories: vary lightness or hue in a perceptual order; do not use arbitrary categorical colors.
-- Continuous values: use a sequential gradient with monotonic lightness.
-- Values with a meaningful center, especially zero: use a diverging gradient with the neutral color at the center.
-
-Layering rules:
-
-- Points and bars carry the main data color.
-- Fitted/model lines should be darker or more saturated than their uncertainty bands.
-- Uncertainty bands should use the same hue family as the fitted line, with lower opacity or lighter color.
-- Reference lines, null lines, brackets, and borders stay black/grey.
-- Large filled areas need calmer, lighter colors than small points or thin lines.
-- If multiple geoms encode the same group in one panel, keep them in the same hue family rather than assigning unrelated colors.
-
-Avoid:
-
-- Default rainbow palettes.
-- High-saturation colors over large areas.
-- A different palette for each figure.
-- Using color to decorate non-data elements.
-- Reusing the same hue for different meanings in different panels of the same paper.
-
-### Color Discipline
-
-- One ordinary panel should usually use 1 to 3 meaningful colors.
-- Use more colors only for true categorical sets such as land-cover classes.
-- Uncertainty bands should be lighter and quieter than the fitted line (`alpha` about 0.15-0.35).
-- Do not reuse a color for two different meanings in the same paper.
-- Do not color titles, axes, borders, or decorative elements.
-- Keep legends only when color meaning is not self-evident from labels or direct annotations.
-- **Colour-blind / B/W parity:** when group identity matters, also map `shape` (points), `linetype` (lines), or fill pattern. Verify the palette with `colorBlindness::cvdPlot()` or `dichromat::dichromat()` before final export.
-
-## Choose the Plot by Evidence Type
-
-Think in statistical roles, not method names.
-
-### Distribution Or Group Differences
-
-Use boxplots, violins, jittered points, beeswarms, mean/median points, or intervals depending on sample size and message. Show raw points when they help reveal spread or sample size. Add `n`, median/mean labels, Tukey letters, or p-value brackets only when they answer the comparison question.
-
-For pairwise significance brackets, use `ggsignif::geom_signif()` and pass `textsize = TXT_GG` (not the default ~3.88) plus `size = LW` to keep them in the skill's typography:
-
-```r
-ggsignif::geom_signif(comparisons = list(c("setosa", "versicolor")),
-                      map_signif_level = TRUE,
-                      family = "Arial", textsize = TXT_GG, size = LW,
-                      tip_length = 0.01)
-```
-
-### Relationship Or Association
-
-Use scatter points plus a fitted curve or line when inference is about association. Add confidence bands if model uncertainty matters. Report `italic(R)^2`, p-values, slopes, or thresholds only when they support the claim. For predicted vs observed or baseline vs final comparisons, use a 1:1 reference line and fixed aspect ratio.
-
-### Model Effects Or Coefficients
-
-Use coefficient plots, forest plots, marginal-effect curves, or interval plots. Always show the null/reference line when relevant, usually at 0 or 1. Prefer estimates with 95% CI over decorative bars.
-
-Forest-plot geom (ggplot2 ≥ 4.0): `geom_errorbarh()` is deprecated; use the horizontal orientation of `geom_errorbar()`:
-
-```r
-ggplot(co_df, aes(est, term)) +
-  geom_vline(xintercept = 0, color = col_ref, linewidth = LW, linetype = "22") +
-  geom_errorbar(aes(xmin = lo, xmax = hi),
-                orientation = "y",
-                width = 0, linewidth = LW_DAT) +
-  geom_point(size = 1.6)
-```
-
-### Ranking Or Importance
-
-Use horizontal bars, dot plots, or lollipop plots sorted by magnitude. This applies to any model-derived or statistical importance measure. The y-axis label should name the metric, not the analysis method. Add values only when they remain readable at final figure size.
-
-### Composition Or Proportion
-
-Use stacked bars, grouped bars, or proportional displays only when parts-of-whole are the message. Keep category order stable across panels and use direct labels when legends become heavy.
-
-### Spatial Evidence
-
-Use neutral basemaps and let points, rasters, or regions carry the data. For site maps, use black-bordered filled points. Hide lat/lon labels when they do not help interpretation; keep panel border and clean map extent.
-
-#### China Maps And Site Distributions
-
-For China maps, use **Rimagination/ggmapcn** rather than `maps::map_data("world")` when administrative boundaries, coastlines, and the South China Sea line matter. The package gives China-specific layers through `ggmapcn::geom_mapcn()` and `ggmapcn::geom_boundary_cn()`.
-
-Recommended dependencies:
-
-```r
-library(sf)
-library(ggmapcn)    # install from: remotes::install_github("Rimagination/ggmapcn")
-library(patchwork)  # for South China Sea inset placement
-```
-
-Use one projected CRS for map polygons, boundary lines, points, and labels. Convert site coordinates to `sf` before plotting; do not mix raw lon/lat points with projected `geom_sf()` layers.
-
-```r
-china_crs <- "+proj=aea +lat_1=25 +lat_2=47 +lat_0=0 +lon_0=105 +datum=WGS84 +units=m +no_defs"
-
-sites_sf <- sites |>
-  sf::st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE) |>
-  sf::st_transform(china_crs)
-
-ggplot() +
-  ggmapcn::geom_mapcn(admin_level = "province", crs = china_crs,
-                      fill = "#F2F2F2", color = "#B8B8B8", linewidth = LW * 0.7) +
-  ggmapcn::geom_boundary_cn(
-    crs = china_crs,
-    mainland_color = "grey35", mainland_size = LW,
-    coastline_color = "#78A6C8", coastline_size = LW * 0.8,
-    ten_segment_line_color = "grey35", ten_segment_line_size = LW,
-    province_color = "#D0D0D0", province_size = LW * 0.55
-  ) +
-  geom_sf(data = sites_sf, aes(fill = group), shape = 21,
-          size = 2.8, stroke = LW_DAT, colour = "black") +
-  coord_sf(crs = china_crs, xlim = c(72, 142), ylim = c(12, 56),
-           default_crs = sf::st_crs(4326), expand = FALSE) +
-  theme_qw_pub()
-```
-
-**South China Sea / nine-dash-line rule.** If the main map focuses on mainland/site locations, do not stretch the whole map to the equator just to show the full South China Sea line. Keep the main map readable and add a South China Sea inset in the lower-right corner.
-
-`patchwork::inset_element()` alone can misalign the inset: `coord_sf()` preserves aspect ratio and can letterbox the actual panel inside the inset slot. Avoid hand-tuned offsets. Compute the inset slot from the aspect ratios of the panels **as rendered**, turn off the inset map's own panel border, then overlay a separate border-only frame. The frame is not constrained by `coord_sf()`, so its right and bottom edges can align exactly to the main panel.
-
-Take the ratio from the built plot, not from the corner points of the lon/lat rectangle. `coord_sf(default_crs = )` derives its limits differently from the bounding box of four transformed corners, so a corner-based ratio does not describe the panel that is actually drawn. On the China extent below the two disagree by 31%, which propagates straight into `inset_width`.
-
-```r
-panel_ratio <- function(p) {
-  bp <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]
-  as.numeric(diff(bp$x_range) / diff(bp$y_range))
-}
-
-# p_main and p_south_china_sea already carry their own coord_sf() limits,
-# e.g. xlim = c(72, 142), ylim = c(12, 56) for the main map and
-#      xlim = c(105, 125), ylim = c(0, 25) for the inset.
-main_ratio <- panel_ratio(p_main)
-inset_ratio <- panel_ratio(p_south_china_sea)
-inset_height <- 0.28
-inset_width <- inset_height * inset_ratio / main_ratio
-
-p_inset_map <- p_south_china_sea +
-  theme(panel.border = element_blank(),
-        axis.text = element_blank(), axis.title = element_blank(),
-        axis.ticks = element_blank(), legend.position = "none",
-        plot.margin = margin(0, 0, 0, 0, "mm"))
-
-p_inset_frame <- ggplot() +
-  theme_void() +
-  theme(plot.background = element_rect(fill = NA, colour = "black", linewidth = LW),
-        plot.margin = margin(0, 0, 0, 0, "mm"))
-
-left <- 1 - inset_width; bottom <- 0; right <- 1; top <- inset_height
-
-p_main +
-  patchwork::inset_element(p_inset_map, left, bottom, right, top, align_to = "panel") +
-  patchwork::inset_element(p_inset_frame, left, bottom, right, top, align_to = "panel")
-```
-
-Use this two-layer inset pattern whenever a fixed-aspect `coord_sf()` inset must have edges flush with the parent panel. Otherwise one edge may look aligned while the other drifts.
-
-### Matrix Evidence
-
-Use heatmaps for correlations, confusion matrices, distance matrices, or pairwise summaries. Signed matrices should use diverging colors centered at zero. Put coefficients or significance marks inside cells only if still readable at output size.
-
-Anchor the diagonal in the **top-left to bottom-right** direction (matrix-style indexing) so the figure reads like the printed `cor()` output: row 1 at the top, column 1 at the left. ggplot's y-axis defaults to factor level 1 at the bottom, which produces a vertically flipped matrix; pin the order with:
-
-```r
-scale_y_discrete(limits = rev(vars_order))
-# or, equivalently, set: factor(y_var, levels = rev(vars_order))
-```
-
-Use explicit row/column names in long data so orientation stays unambiguous:
-
-```r
-vars_order <- c("GPP", "NEE", "LAI", "VPD", "Tair")
-cor_mat <- cor(dat[, vars_order], use = "complete.obs")
-cor_df <- as.data.frame(as.table(cor_mat))
-names(cor_df) <- c("row_var", "col_var", "r")  # as.table(): row first, column second
-cor_df$row_id <- match(cor_df$row_var, vars_order)
-cor_df$col_id <- match(cor_df$col_var, vars_order)
-
-lower_df <- subset(cor_df, row_id >= col_id)   # lower triangle
-lower_df$row_var <- factor(lower_df$row_var, levels = rev(vars_order))
-lower_df$col_var <- factor(lower_df$col_var, levels = vars_order)
-
-ggplot(lower_df, aes(x = col_var, y = row_var, fill = r))
-```
-
-For a lower-triangular display this puts the empty triangle in the upper-right; for upper-triangular use `row_id <= col_id` instead. Never swap `x = row_var` and `y = col_var`: that produces a mirror-image triangle even if `scale_y_discrete(limits = rev(vars_order))` is present.
-Without anchoring, two readers of the same skill produce mirror-image figures of the same data.
-
-For dual-state in-cell text colour (white over saturated cells, black over light), map a literal hex column with `scale_color_identity()` so ggplot does not try to legend-map it:
-
-```r
-geom_text(aes(label = sprintf("%.2f", r),
-              colour = ifelse(abs(r) > 0.6, "white", "black")),
-          family = "Arial", size = TXT_GG, show.legend = FALSE) +
-  scale_color_identity()
-```
-
-### Time Or Ordered Sequences
-
-Use lines and ribbons for trends, points/intervals for sparse repeated estimates, and consistent colors for repeated groups. Avoid smoothing if the statistical claim is about observed seasonality or discrete time steps.
-
-### Multi-Panel Figures
-
-All panels in a figure must share the same font, border, line weight, color semantics, and export DPI. Use common scales when panels are being compared; use free scales only when the caption or axis labels make that choice clear.
-
-### Faceting
-
-`facet_wrap` / `facet_grid` is the right tool when every panel encodes the *same* variables and only the data subset changes; reach for `patchwork` when panels show different geometries, axes, or legends.
-
-- Default to `scales = "fixed"`. Switch to `"free_x"` / `"free_y"` only when an outlier subgroup forces it; never silently use `"free"` (it changes both axes and breaks visual comparison).
-- Strip text inherits from `theme_qw_pub()` and is already Arial 8 pt — do not override.
-- For ordered facets (year, treatment level), set the factor order before plotting; `facet_wrap(..., dir = "v")` does not sort.
-- Many small facets: shrink internal margins via `theme(panel.spacing = unit(2, "mm"))` before reducing font.
-
-### Large Data (n ≳ 10⁵)
-
-Plain `geom_point()` saves every overdrawn point as a separate vector path; an SVG/PDF can balloon to hundreds of MB and crash Acrobat.
-
-- Rasterise the heavy layer only: `ggrastr::rasterise(geom_point(...), dpi = 600)` keeps the rest of the figure as vector.
-- For density of points, `geom_hex()` or `geom_bin2d()` reads better than overplotted points anyway.
-- For random subsamples, fix the seed (`set.seed(...)` + `dplyr::slice_sample(n = ...)`) and report the subsample size in the caption.
-
-## Statistical Annotation
-
-Use annotations as evidence, not decoration.
-
-```r
-p_label <- function(p) {
-  if (p < 0.001) "italic(p) < 0.001"
-  else if (p < 0.01) "italic(p) < 0.01"
-  else if (p < 0.05) "italic(p) < 0.05"
-  else sprintf("italic(p) == %.3f", p)
-}
-
-r2_label <- function(r2) sprintf("italic(R)^2 == %.3f", r2)
-```
-
-Rules:
-
-- Use `parse = TRUE` for `italic(p)`, `italic(R)^2`, and mathematical notation.
-- Use `expression()` for subscripts, superscripts, and units.
-- Put annotations in stable positions: top-right, bottom-right, above groups, or directly beside estimates. Prefer NPC coordinates over `Inf` + `hjust`/`vjust` magic numbers; `ggpp::geom_text_npc()` (or a small wrapper using `grid::unit(..., "npc")`) is more robust than `annotate("text", x = Inf, ...)`.
-- **Always pass `size = TXT_GG`** to `geom_text` / `annotate("text")` — bare `size = 8` renders ≈ 22.6 pt.
-- Do not overcrowd a panel with every available statistic. Show the statistic that supports the figure's purpose.
-- Report sample size when the figure summarizes groups or site-level data.
-
-Preferred form (NPC, no `Inf` magic):
-
-```r
-ann_df <- data.frame(
-  x = 0.97, y = c(0.97, 0.91, 0.85),
-  label = c(r2_label(r2_v), p_label(p_v), sprintf("italic(n) == %d", n_obs))
-)
-
-ggpp::geom_text_npc(
-  data = ann_df,
-  aes(npcx = x, npcy = y, label = label),
-  inherit.aes = FALSE,                                  # ann_df has no group/colour columns
-  parse = TRUE, hjust = 1, vjust = 1,
-  family = "Arial", size = TXT_GG, colour = "black"
+  Reference = "#6B6B6B",
+  Treatment = "#0072B2"
 )
 ```
 
-`inherit.aes = FALSE` is required when the parent ggplot has any grouping aes (`aes(colour = group)`, `aes(shape = group)`, `aes(linetype = group)`) and the annotation data lacks that column. Today `ggpp::geom_text_npc` tolerates missing inherited colour/fill, but discrete `shape`/`linetype` mappings (which the skill recommends elsewhere for B/W parity) error under ggplot2 ≥ 4.0.
+Keep every consequential value in this block or beside the operation it controls. Avoid unexplained magic numbers.
 
-Avoid `annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.6)` — the magic `hjust/vjust` overshoots clip with small panels.
+## Workflow
 
-## Dimensions And Export
+### 1. Define the evidence and destination
 
-Always design for the final physical size. Do not tune a figure only in the RStudio viewer.
+Record the scientific question, audience, variables and units, sample/replicate structure, estimator and uncertainty, missing/censored values, transformations, target width, source paths, and output formats.
 
-Common starting points:
+If the user supplies data but no question or requested figure type, ask what they are trying to learn before selecting a plot. Cosmetic edits and explicit plot requests do not require a new analysis plan.
 
-| Use | Size |
+### 2. Audit data before plotting
+
+Write visible checks into the delivered script: row count, missing/non-finite counts, factor levels/order, duplicate identifiers, zero variance, invalid log values, and rows excluded by each filter. Print or save the results. Do not rely on a hidden audit helper.
+
+### 3. Choose the encoding
+
+| Evidence | Preferred starting point |
 |---|---|
-| Small single panel | `70 x 75 mm` |
-| Square comparison panel | `100 x 100 mm` or `10/2.54 x 10/2.54 in` |
-| Wide group comparison | `200 x 80-100 mm` |
-| Multi-panel figure | `20 x 13 cm` via `width = 20/2.54`, `height = 13/2.54` |
-| Map | choose by extent, usually wide; keep `dpi = 600` for fine borders |
+| Distribution/group difference | raw points + box/violin/interval as justified |
+| Relationship | scatter + declared fit/CI; 1:1 line only when scientifically relevant |
+| Model effect | coefficient/forest/marginal-effect plot with null line |
+| Ranking | sorted dot/bar/lollipop with metric named |
+| Composition | stacked/grouped display only for part-to-whole questions |
+| Matrix | heatmap with explicit orientation, ordering, center, and missing color |
+| Time/sequence | lines/ribbons or points/intervals; preserve missing-data gaps |
+| Spatial | neutral basemap, one CRS, restrained boundaries, focal data on top |
+| Multi-panel synthesis | facet shared variables; patchwork different geometries/axes |
+
+Read the matching reference before coding uncommon or fragile layouts.
+
+### 4. Build with explicit styles
+
+Write `theme_classic()` and the complete `theme()` block directly in the delivered script. Order matters: `theme_classic()` and every other `theme_*()` preset is a **complete** theme, so adding it after your own `theme()` call discards that call entirely. `p + theme(legend.position = "inside", ...) + publication_theme` silently loses the inside legend and renders it on the right, because `theme_classic()` carries `legend.position = "right"`. Always add the preset first and your `theme()` modifications after it, and verify with `ggplot_build(p)$plot$theme$legend.position`. Apply the chosen font explicitly to text, axes, legends, strips, captions, and tags. Use `TEXT_GG` for `geom_text()`/`annotate()` because their size unit is not points.
+
+Define named palettes and pin legend order with factors or `breaks = names(paper_palette)`. Check contrast and then visually inspect color-vision and grayscale separation; automated contrast does not certify accessibility.
+
+Place a necessary legend inside a verified empty part of the data rectangle when possible. On ggplot2 ≥ 3.5, use `legend.position = "inside"`, explicit NPC coordinates, and justification. For a map, set `legend.background`, `legend.box.background`, and `legend.key` to transparent/borderless elements; do not draw a white card or black legend frame over the geography. For a non-spatial plot, use a readable unobtrusive background only when transparency would reduce legibility. Inspect the exported image to confirm the legend does not cover observations, intervals, labels, coastlines, focal regions, or an inset. If the panel has no safe whitespace, prefer direct labels or a right-side/shared guide instead of placing the legend above or below the panel.
+
+### 5. Annotate only supporting evidence
+
+Show only statistics supporting the panel purpose. Write p-value, R², and `n` formatting directly in the script, and state the model/test, interval definition, correction, and replication unit in the caption or notes. Set `inherit.aes = FALSE` for annotation-only data.
+
+For a regular multi-panel figure, do not repeat long methodological prose below each panel. Put shared details in one figure-level note, manuscript caption, console audit, or adjacent data manifest. This preserves scientific disclosure without consuming the panel area. A panel-specific note may remain when it is genuinely unique and necessary.
+
+### 6. Compose at final size
+
+Use shared scales only when comparison is intended. Collect axes/guides only when scales truly match. Default to lowercase tags:
 
 ```r
-out_dir <- "figures"            # define before any ggsave()
-dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-
-ggsave(
-  file.path(out_dir, "figure.png"),
-  plot   = p,
-  width  = 70,
-  height = 75,
-  units  = "mm",
-  dpi    = 600,
-  bg     = "white",
-  device = ragg::agg_png        # font-aware, see "Engine and Fonts"
-)
-
-if (requireNamespace("svglite", quietly = TRUE)) {
-  ggsave(
-    file.path(out_dir, "figure.svg"),
-    plot   = p,
-    width  = 70,
-    height = 75,
-    units  = "mm",
-    bg     = "white",
-    device = svglite::svglite   # font-aware vector, no XQuartz needed
-  )
-}
+PANEL_ASPECT <- 0.72
+PANEL_ASPECT_TOLERANCE <- 0.005
+MIN_PANEL_AREA_SHARE <- 0.40  # provisional diagnostic for this 2 x 2 design
+# Do NOT pass widths/heights here. Explicit layout units make wrap_plots()
+# stretch each panel to fill its slot, which silently overrides
+# theme(aspect.ratio). Measured on ggplot2 4.0.3 / patchwork 1.3.2, a request
+# for 0.618 renders as 0.570 with widths = c(1, 1), heights = c(1, 1) - the
+# same value as setting no aspect ratio at all - and as 0.618 with the layout
+# units left at their defaults.
+composite <- patchwork::wrap_plots(
+  p1 + theme(aspect.ratio = PANEL_ASPECT),
+  p2 + theme(aspect.ratio = PANEL_ASPECT),
+  p3 + theme(aspect.ratio = PANEL_ASPECT),
+  p4 + theme(aspect.ratio = PANEL_ASPECT),
+  ncol = 2
+) +
+  patchwork::plot_annotation(tag_levels = "a")
 ```
 
-## Workflow For A New Figure
+Use absolute row heights (`grid::unit(..., "mm")`) when the row height itself is the calibrated quantity, and `aspect.ratio` with default layout units when the panel shape is. Do not use both: they express the same constraint twice, and the layout unit wins. Verify the rendered aspect after composing; a loose tolerance hides this exact failure.
 
-1. State the evidence type: distribution, association, model effect, ranking, composition, spatial, matrix, time, or multi-panel synthesis.
-2. Pick geometry that matches that evidence type.
-3. Decide the final physical layout, including panel arrangement, legend position, and relative panel sizes.
-4. Apply `theme_qw_pub()` and the hard base rules.
-5. Choose colors by semantic role and reuse the paper palette.
-6. Add only the statistical annotations needed to support the claim.
-7. Export at final physical size. If visual inspection is available, check text, labels, legends, and panel proportions before delivery; otherwise use conservative spacing and do not claim visual QA was performed.
+For a regular grid, use one flat `wrap_plots()` layout. Do not independently nest row layouts such as `(p1 | p2) / (p3 | p4)` when column panel edges must match; nested rows calculate their geometry separately. Apply one explicit `aspect.ratio` to every ordinary panel in the equal-frame grid.
 
-## Common Mistakes
+**Canvas width rule.** Keep a multi-panel composite at or below 210 mm of total canvas width, the width of A4 paper; 170-190 mm is the usual working range. An explicitly requested golden-ratio variant is the one exception and may go wider (see below). A composite wider than the page is rescaled when it is placed into Word or a manuscript template, and that rescaling drops 8 pt text below legibility and thins the 1 pt frame. Height is not capped by this rule: a tall composite still prints at its authored width. A single figure has no canvas-size requirement, because it occupies little of the page and is rarely rescaled; size it from its evidence using the provisional sizes in `references/style-and-export.md`. State the target width before composing, and treat 210 mm as a physical page ceiling rather than evidence of any journal's compliance.
 
-| Mistake | Correction |
-|---|---|
-| Writing method-specific recipes as universal rules | Use evidence type first, then choose geometry |
-| Changing colors from figure to figure | Define a paper palette and reuse semantic colors |
-| Using colorful axes, borders, or titles | Keep structure black/grey; reserve color for data |
-| Hiding legends automatically | Hide only when direct labels or axes already explain color |
-| Putting every legend outside the panel | Use unused in-panel whitespace when it does not cover evidence |
-| Putting a colorbar inside a triangular matrix | Matrix colorbars default outside (`legend.position = "right"`) |
-| Swapping x/y in a correlation matrix long table | Use `aes(x = col_var, y = row_var)`; for lower triangle filter `row_id >= col_id` and reverse only the y-axis levels |
-| Distorting panels during patchwork assembly | Set `plot_layout(widths/heights)`; render `coord_fixed` panels separately |
-| `coord_fixed` panel inside `(p1\|p2)/(p3\|p4)` shrinks unexpectedly | `plot_layout(widths = c(1,1))` does NOT equalize sizes — use `wrap_elements()` or pre-compute data aspect (see Recipe A/B in Layout And Legends) |
-| Using default ggplot fonts | Force Arial 8 pt in theme and annotations; register with `systemfonts` |
-| `geom_text(size = 8)` looks huge | Pass `size = TXT_GG` (= `8 / .pt`) — ggplot text size is in mm, not pt |
-| `font family 'Arial' not found` warnings | Install `systemfonts` + `ragg`; export via `ragg::agg_png` / `cairo_pdf` |
-| `legend.position = c(x,y)` warning | Use `"inside"` + `legend.position.inside = c(x,y)` |
-| `geom_errorbarh()` deprecated | Use `geom_errorbar(orientation = "y")` |
-| Boxplot/fitted lines look as thin as panel border | Data lines should be `LW * 1.7`–`LW * 2.0` so data > structure (lower factors sit below the perceptual threshold) |
-| Drawing axis lines plus panel border | Blank `axis.line`; keep the four-sided border |
-| Exporting by pixels or viewer size | Use `ggsave()` with physical units and DPI |
-| `Inf` + `hjust = 1.1` annotations clip on small panels | Use NPC coordinates / `ggpp::geom_text_npc()` |
-| Adding all possible statistics | Add only the evidence needed for the figure's claim |
+Choose figure width and height by rendering the whole composition, not by guessing from the outer canvas. These rules apply to any panel count: two panels side by side, a 2 × 3 sweep, a nine-panel matrix, or a map anchoring four statistical views. Panel count changes the numbers, not the method. `MIN_PANEL_AREA_SHARE <- 0.40` is a useful starting diagnostic for a 2 × 2 figure rather than a universal publishing rule; expect a lower share as panel count rises, because axis strips and inter-panel gaps multiply, and declare the threshold you actually used for this figure. Measure the sum of the four data-panel areas divided by total figure area, and measure each panel's rendered height/width. If the panels are too small or too flat, revise physical dimensions, legends, margins, and annotations before accepting the layout.
+
+Do not distort maps, polar plots, or geometry whose fixed aspect carries meaning. A fixed-aspect panel that conflicts with the common frame belongs in a dedicated row/column, inset, or intentionally unequal layout. Read `references/style-and-export.md` for the decision rules and the final-size panel-coordinate check.
+
+For a map joined to a statistical panel, let the map's rendered width/height guide the composition: near-square national maps often work side by side, while wide world maps usually work better above a compact horizontal statistical panel. Use fixed-aspect-aware `NA` widths/heights rather than forcing equal numeric units, then measure the actual map and statistical rectangles. Read `references/maps-and-spatial.md` for map-plus-statistics rules; a map-anchored synthesis of any panel count follows the Multi-Panel Map Synthesis standard defined there.
+
+When the user explicitly asks for a golden-ratio variant, separate three numbers instead of enforcing one:
+
+```r
+GOLDEN_RATIO <- (1 + sqrt(5)) / 2
+GOLDEN_BAND <- c(1.50, 1.75)         # accepted panel width / height
+CANVAS_RATIO_TOLERANCE <- 0.005      # canvas W/H against GOLDEN_RATIO
+ASPECT_FIDELITY_TOLERANCE <- 0.005   # rendered aspect against the requested one
+```
+
+- **Canvas**: keep `FIG_WIDTH_MM / FIG_HEIGHT_MM` within `CANVAS_RATIO_TOLERANCE` of `GOLDEN_RATIO`. Hitting it exactly is free, because both numbers are passed to `ggsave()`.
+- **Panels**: each requested golden panel's rendered width/height must land inside `GOLDEN_BAND`, not on the point value. Report every measured ratio. The band is centred on 1.618 and runs from 3:2 to 7:4, which still reads as one harmonious wide rectangle; below 1.5 a panel starts to read as 4:3, above 1.75 as a strip.
+- **Fidelity**: the rendered aspect must match the requested one within `ASPECT_FIDELITY_TOLERANCE`. This is not an aesthetic tolerance and must stay tight; it is what catches an `aspect.ratio` that patchwork silently dropped.
+
+Do not widen the canvas merely to reach the point value. On a golden canvas the row height is capped by the canvas, so the wide end of the band buys back panel area at no cost: measured on a 190 x 117.43 mm sheet, a 2 x 2 grid gives an area share of 0.504 at 1.50, 0.544 at exactly 1.618, and 0.588 at 1.75, with panel height fixed at 43.3 mm throughout. A requested golden variant may still exceed the 210 mm composite ceiling when the geometry genuinely needs it, but try the band first: forcing exact golden panels on a 220 mm canvas produced the same 0.588 area share that 190 mm reaches inside the band. Report the width whenever it passes 210 mm, and note that such a figure is rescaled in an A4 Word page. Treat this as an optional design experiment, not a universal scientific standard. Never stretch a map to reach the ratio: preserve its CRS and coordinate scale, and reach the target through a defensible viewport, cropping choice, panel allocation, or transparent surrounding space. Report any map panel that cannot meet the requested ratio without changing the scientific extent.
+
+### 7. Export explicitly
+
+Write the device and dimensions in the final script and guard against accidental overwrite. Keep the guard switchable so that the mandated inspect-and-iterate loop does not require deleting files by hand between runs; the default stays refusing:
+
+```r
+OVERWRITE <- FALSE   # set TRUE only while iterating on the same figure
+output_png <- "outputs/figure-1.png"
+if (!OVERWRITE && file.exists(output_png)) {
+  stop("Refusing to overwrite: ", output_png, " (set OVERWRITE <- TRUE to replace)")
+}
+
+ggplot2::ggsave(
+  filename = output_png,
+  plot = composite,
+  device = ragg::agg_png,
+  width = FIG_WIDTH_MM,
+  height = FIG_HEIGHT_MM,
+  units = "mm",
+  dpi = FIG_DPI,
+  bg = "white"
+)
+```
+
+Use explicit `ragg::agg_tiff`, `svglite::svglite`, Quartz PDF on macOS, or a verified Cairo PDF elsewhere. Never rely on the active viewer size or implicit last plot.
+
+Write a figure-level sidecar caption text file (same basename plus `.caption.txt`) beside every exported figure with `writeLines(enc2utf8(lines), path, useBytes = TRUE)`, because plain `writeLines()` under a C locale turns a degree sign or CJK character into the literal placeholder `<U+00B0>`. The sidecar carries the panel alt texts, sample sizes, uncertainty definitions, seeds, exclusion and transformation notes, measured geometry, and R/package versions. Do not draw these disclosures into the image itself.
+
+### 8. Inspect and iterate
+
+Build the plot with `ggplot2::ggplot_build()`, verify labels/alt text from `ggplot2::get_labs()`, then inspect the exported file at final size. For composition geometry, use `scripts/rfigure_layout.R` rather than writing a private viewport walker: hand-rolled versions routinely measure patchwork's `panel-area` viewport (the whole grid region) instead of the panels and report confident nonsense. If you cannot see images in this session, say so in the delivery, and replace the visual pass with programmatic checks that go down to glyph level - read the exported PNG's pixels to confirm legend-versus-data overlap and tag clearance - rather than declaring the figure inspected. For a regular multi-panel grid, read the final composition's panel viewports and verify equal widths/heights plus common row/column edges within a declared physical tolerance; canvas-slot alignment is not sufficient. Calibrate and enforce these geometry checks against the PNG device; measure the SVG geometry and report it for information instead of failing delivery on sub-tolerance font-metric drift. Also calculate actual panel height/width and total panel-area share using visible, figure-specific thresholds. Check fonts, clipping, legends, panel proportions, line hierarchy, missingness, annotations, map/inset alignment, and metadata. Keep long shared notes outside the subfigure rectangles; if the venue requires notes inside the exported image, wrap them and increase the physical height rather than shrinking the panels.
+
+## Compact Rules
+
+- Show raw observations when feasible; summaries must not conceal sample size or spread.
+- Name uncertainty precisely: SD, SE, 95% CI, percentile interval, posterior interval, etc.
+- Use diverging color only around a meaningful center; sequential color for unsigned magnitude; cyclic color only for cyclic variables.
+- Distinguish missing, zero, censored, excluded, and out-of-range values.
+- Preserve gaps in time series unless interpolation/model prediction is explicit, and confirm at final size that a preserved gap is actually visible; `na.omit()` before plotting silently interpolates across it.
+- Count and disclose rows that a declared `limits = ` would drop; a scale limit is a filter, not a zoom.
+- Write text sidecar files with `writeLines(enc2utf8(x), path, useBytes = TRUE)`.
+- Use `coord_sf(xlim = ..., ylim = ..., default_crs = ..., expand = FALSE)` for geographic limits; do not use `xlim()`/`ylim()` on sf maps.
+- Cap a multi-panel composite at 210 mm of canvas width; do not cap the size of a single-panel figure, and do not cap an explicitly requested golden-ratio variant.
+- Draw a map graticule from explicit `scale_x_continuous()`/`scale_y_continuous()` breaks plus `panel.grid.major`, and keep `coord_sf(label_axes = "--EN")` so only the bottom and left edges carry labels.
+- Format geographic tick labels as decimal degrees with a fixed number of decimals; do not mix degree-minute-second and decimal notation in one figure.
+- Do not draw a north arrow unless the user asks for one; the graticule already shows orientation.
+- Keep the map projection in one visible parameter so a recipient can change it, and state the projection and why it suits the map's purpose.
+- Choose a world projection to match the frame: rectangular (`plate_carree`, or `behrmann` when area matters) if the panel keeps its four-sided frame, pseudocylindrical only with its graticule or its own oval outline.
+- Removing a map's graticule also removes its latitude labels on a curved-graticule projection; verify the rendered labels after changing it.
+- Cut world-map polygons at the projection's antimeridian after any `st_make_valid()` call; s2 rejoins Russia and Fiji and they render as horizontal streaks across the whole map.
+- Derive a hemisphere suffix from the value's sign, never from a scalar axis flag inside `ifelse()`, and leave the equator and prime meridian unsuffixed.
+- Draw categorical sampling sites on maps as same-size solid circles by default (`shape = 21` with class-specific `fill`, or `shape = 16` with class-specific `colour`); do not map class to `shape` unless requested.
+- Use `geom_errorbar(orientation = "y")` instead of deprecated `geom_errorbarh()`.
+- Use `legend.position = "inside"` with `legend.position.inside` on ggplot2 ≥ 3.5; numeric `legend.position` is deprecated.
+- Add a complete theme (`theme_classic()`, `theme_bw()`, a preset that wraps one) before your own `theme()` calls; a complete theme added afterwards discards them.
+- Never combine `theme(aspect.ratio = ...)` with explicit patchwork `widths`/`heights`; the layout unit wins and the aspect request is silently dropped.
+- Space stacked direct labels from physical geometry: minimum gap in data units = clearance factor × label height (mm) ÷ rendered panel height (mm) × axis span, with a floor clamp; never hard-code a fraction of the span.
+- Enforce rendered-geometry checks on the PNG device; measure and report SVG geometry as informational.
+- Do not claim publisher compliance, accessibility, or statistical validity from a style preset or automated check alone.
+
+## Final Checklist
+
+- [ ] The delivered `.R` file is self-contained and does not call this skill's helper scripts.
+- [ ] All plotting and export parameters are visible in the code.
+- [ ] Raw data, transformations, exclusions, missingness, and random seeds are preserved and disclosed.
+- [ ] Estimator, uncertainty, `n`, and replication unit are correctly represented.
+- [ ] Scales, baselines, limits, smoothing, and normalization are honest.
+- [ ] Arial 8 pt (or an explicit CJK family), four-sided 1 pt border, white background, and heavier data lines are consistent.
+- [ ] Multi-panel tags default to lowercase `a`, `b`, `c`, ...
+- [ ] Regular multi-panel grids of any panel count use one flat layout and their rendered data-panel rectangles pass row/column edge alignment checks at final size.
+- [ ] The measured panel count equals the intended one; `wrap_elements()`, insets, and nested compositions can add panel viewports.
+- [ ] Regular multi-panel grids also pass declared rendered-aspect and panel-area-share checks at a tolerance tight enough to catch a silently dropped `aspect.ratio`; alignment was not achieved by making the panels too small.
+- [ ] Inside legends survived theme composition: the built plot really reports `legend.position = "inside"`.
+- [ ] Map-plus-statistics layouts preserve the map projection, choose rows/columns from rendered geometry, and verify the shared panel edges after export.
+- [ ] Categorical map sites use one solid circular shape with stable class colors by default; map legends and statistical panels preserve the same color meanings.
+- [ ] Interior map legends are transparent and borderless, and visual inspection confirms they cover no geographic or analytical evidence.
+- [ ] Every geographic map carries a left/bottom graticule with decimal-degree labels, or the omission is deliberate and disclosed.
+- [ ] The map projection sits in one visible parameter, is named in the disclosure, and suits the map's purpose and extent.
+- [ ] A multi-panel composite is at or below 210 mm wide so it needs no rescaling in Word; single-panel figures are exempt from that ceiling.
+- [ ] A requested golden-ratio variant keeps the canvas near-exact, lands every requested panel inside the declared ratio band, reports all measured ratios, and does not stretch fixed-aspect geometry; if its width exceeds 210 mm, the width and its rescaling consequence are stated.
+- [ ] Repeated prose is not placed below every subfigure unless it is scientifically or editorially required; shared disclosure remains available in one figure-level note or adjacent output.
+- [ ] Color semantics are stable and identity is redundantly encoded where needed.
+- [ ] Legends use inspected interior whitespace when available; otherwise their alternate placement is deliberate and does not unnecessarily reduce panel height.
+- [ ] Axis/legend labels include full variable names and units.
+- [ ] Alt text describes chart type, variables, groups, and the main visible pattern without overstating inference.
+- [ ] Stacked direct labels use physically derived spacing and do not overlap at final size.
+- [ ] Panel tags keep at least 1 mm clearance from neighbouring axis decorations.
+- [ ] Every exported figure has a sidecar `.caption.txt` with panel descriptions, disclosures, measured geometry, and software versions, written through `enc2utf8()` with `useBytes = TRUE`.
+- [ ] Every graticule break on a map panel produces a drawn axis label, checked against the rendered axis text rather than graticule geometry.
+- [ ] A world map has no polygon ring crossing the antimeridian, and the exported image shows no horizontal streak.
+- [ ] The world projection, the panel frame, and the graticule agree: a rectangular frame goes with a rectangular projection, and a dropped graticule was confirmed not to drop the labels.
+- [ ] Longitude and latitude labels carry the hemisphere of their own sign, asserted in the script.
+- [ ] Rows that a declared scale limit would silently discard were counted and disclosed.
+- [ ] Physical dimensions, format, DPI, fonts, clipping, and file size were inspected.
+- [ ] Live journal rules were verified when a venue-specific claim is made.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "R Figure"
+  short_description: "Create public self-contained ggplot2 figure scripts"
+  default_prompt: "Use $rfigure to create a publication-ready, self-contained R figure script with all parameters visible, lowercase panel tags, and verified exports."
